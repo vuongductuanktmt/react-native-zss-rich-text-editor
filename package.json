@@ -2,14 +2,34 @@
   "name": "react-native-zss-rich-text-editor",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wix/react-native-zss-rich-text-editor.git"
+    "url": "https://github.com/boreal-is/react-native-zss-rich-text-editor.git"
   },
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "React Native Wrapper for ZSSRichTextEditor",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "ts-compile": "tsc --build tsconfig.json && yarn copy-extra",
+    "copy-extra": "cp ./src/*.html ./dist"
+  },
   "dependencies": {
     "react-native-webview": "^8.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.6.2",
+    "@babel/runtime": "^7.6.2",
+    "@react-native-community/eslint-config": "^0.0.5",
+    "@types/react": "^16.9.6",
+    "@types/react-native": "^0.60.23",
+    "@typescript-eslint/eslint-plugin": "^2.6.1",
+    "@typescript-eslint/parser": "^2.6.1",
+    "eslint": "^6.6.0",
+    "eslint-config-prettier": "^6.5.0",
+    "eslint-plugin-prettier": "^3.1.1",
+    "babel-core": "^7.0.0-0",
+    "prettier": "^1.16.4",
+    "typescript": "^3.7.2"
   },
   "peerDependencies": {
     "react": "*",

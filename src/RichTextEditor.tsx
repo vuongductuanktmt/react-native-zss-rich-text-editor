@@ -1,39 +1,58 @@
-import React, {Component} from 'react';
-import PropTypes from 'prop-types';
-// import WebViewBridge from 'react-native-webview-bridge-updated';
-import WebView from 'react-native-webview';
-import {MessageConverter} from './WebviewMessageHandler';
-import {actions, messages} from './const';
-import {Modal, View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, PixelRatio, Keyboard, Dimensions} from 'react-native';
+import React, { Component } from "react";
+import PropTypes from "prop-types";
+import WebView, { WebViewMessageEvent } from "react-native-webview";
+import { MessageConverter } from "./WebviewMessageHandler";
+import { actions, messages } from "./constants";
+import {
+  Dimensions,
+  EmitterSubscription,
+  Keyboard,
+  Modal,
+  PixelRatio,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from "react-native";
 
-// const injectScript = `
-//   (function () {
-//     ${InjectedMessageHandler}
-//   }());
-// `;
+const PlatformIOS = Platform.OS === "ios";
 
-const PlatformIOS = Platform.OS === 'ios';
+type PropTypes = {
+  initialHTMLValue?: string;
+  placeholder?: string;
+  onInitialized?: () => {};
+  customCSS?: string;
+  footerHeight: number;
+  contentInset: { top?: number; bottom?: number };
+  style: { marginTop?: number; marginBottom?: number };
+  onChange?: (html: string, text: string) => {};
+};
 
-export default class RichTextEditor extends Component {
-  static propTypes = {
-    initialTitleHTML: PropTypes.string,
-    initialContentHTML: PropTypes.string,
-    titlePlaceholder: PropTypes.string,
-    contentPlaceholder: PropTypes.string,
-    editorInitializedCallback: PropTypes.func,
-    customCSS: PropTypes.string,
-    hiddenTitle: PropTypes.bool,
-    enableOnChange: PropTypes.bool,
-    footerHeight: PropTypes.number,
-    contentInset: PropTypes.object
-  };
+type StateType = {
+  selectionChangeListeners?: any[];
+  onChange?: any[];
+  showLinkDialog?: boolean;
+  linkInitialUrl?: string;
+  linkTitle?: string;
+  linkUrl?: string;
+  keyboardHeight?: number;
+};
 
+export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
   static defaultProps = {
     contentInset: {},
-    style: {}
+    style: {},
   };
 
-  constructor(props) {
+  webViewRef: WebView | null = null;
+
+  _selectedTextChangeListeners: any = [];
+  keyboardEventListeners: EmitterSubscription[] = [];
+
+  constructor(props: PropTypes) {
     super(props);
     this._sendAction = this._sendAction.bind(this);
     this.registerToolbar = this.registerToolbar.bind(this);
@@ -44,34 +63,34 @@ export default class RichTextEditor extends Component {
       selectionChangeListeners: [],
       onChange: [],
       showLinkDialog: false,
-      linkInitialUrl: '',
-      linkTitle: '',
-      linkUrl: '',
-      keyboardHeight: 0
+      linkInitialUrl: "",
+      linkTitle: "",
+      linkUrl: "",
+      keyboardHeight: 0,
     };
     this._selectedTextChangeListeners = [];
   }
 
   componentDidMount() {
-    if(PlatformIOS) {
+    if (PlatformIOS) {
       this.keyboardEventListeners = [
-        Keyboard.addListener('keyboardWillShow', this._onKeyboardWillShow),
-        Keyboard.addListener('keyboardWillHide', this._onKeyboardWillHide)
+        Keyboard.addListener("keyboardWillShow", this._onKeyboardWillShow),
+        Keyboard.addListener("keyboardWillHide", this._onKeyboardWillHide),
       ];
     } else {
       this.keyboardEventListeners = [
-        Keyboard.addListener('keyboardDidShow', this._onKeyboardWillShow),
-        Keyboard.addListener('keyboardDidHide', this._onKeyboardWillHide)
+        Keyboard.addListener("keyboardDidShow", this._onKeyboardWillShow),
+        Keyboard.addListener("keyboardDidHide", this._onKeyboardWillHide),
       ];
     }
   }
 
   componentWillUnmount() {
-    this.keyboardEventListeners.forEach((eventListener) => eventListener.remove());
+    this.keyboardEventListeners.forEach(eventListener => eventListener.remove());
   }
 
-  _onKeyboardWillShow(event) {
-    console.log('!!!!', event);
+  _onKeyboardWillShow(event: any) {
+    console.log("!!!!", event);
     const newKeyboardHeight = event.endCoordinates.height;
     if (this.state.keyboardHeight === newKeyboardHeight) {
       return;
@@ -79,50 +98,36 @@ export default class RichTextEditor extends Component {
     if (newKeyboardHeight) {
       this.setEditorAvailableHeightBasedOnKeyboardHeight(newKeyboardHeight);
     }
-    this.setState({keyboardHeight: newKeyboardHeight});
+    this.setState({ keyboardHeight: newKeyboardHeight });
   }
 
-  _onKeyboardWillHide(event) {
-    this.setState({keyboardHeight: 0});
+  _onKeyboardWillHide() {
+    this.setState({ keyboardHeight: 0 });
   }
 
-  setEditorAvailableHeightBasedOnKeyboardHeight(keyboardHeight) {
-    const {top = 0, bottom = 0} = this.props.contentInset;
-    const {marginTop = 0, marginBottom = 0} = this.props.style;
+  setEditorAvailableHeightBasedOnKeyboardHeight(keyboardHeight: number) {
+    const { top = 0, bottom = 0 } = this.props.contentInset;
+    const { marginTop = 0, marginBottom = 0 } = this.props.style;
     const spacing = marginTop + marginBottom + top + bottom;
 
-    const editorAvailableHeight = Dimensions.get('window').height - keyboardHeight - spacing;
+    const editorAvailableHeight = Dimensions.get("window").height - keyboardHeight - spacing;
     this.setEditorHeight(editorAvailableHeight);
   }
 
-  onMessage({ nativeEvent }){
+  contentResolve?: any;
+  contentReject?: any;
+  pendingContentHtml?: number;
+  selectedTextResolve?: any;
+  selectedTextReject?: any;
+  pendingSelectedText?: number;
+
+  onMessage(message: WebViewMessageEvent) {
+    const { nativeEvent } = message;
     const { data: str } = nativeEvent;
     try {
       const message = JSON.parse(str);
 
       switch (message.type) {
-        case messages.TITLE_HTML_RESPONSE:
-          if (this.titleResolve) {
-            this.titleResolve(message.data);
-            this.titleResolve = undefined;
-            this.titleReject = undefined;
-            if (this.pendingTitleHtml) {
-              clearTimeout(this.pendingTitleHtml);
-              this.pendingTitleHtml = undefined;
-            }
-          }
-          break;
-        case messages.TITLE_TEXT_RESPONSE:
-          if (this.titleTextResolve) {
-            this.titleTextResolve(message.data);
-            this.titleTextResolve = undefined;
-            this.titleTextReject = undefined;
-            if (this.pendingTitleText) {
-              clearTimeout(this.pendingTitleText);
-              this.pendingTitleText = undefined;
-            }
-          }
-          break;
         case messages.CONTENT_HTML_RESPONSE:
           if (this.contentResolve) {
             this.contentResolve(message.data);
@@ -149,134 +154,136 @@ export default class RichTextEditor extends Component {
           if (this.props.customCSS) {
             this.setCustomCSS(this.props.customCSS);
           }
-          this.setTitlePlaceholder(this.props.titlePlaceholder);
-          this.setContentPlaceholder(this.props.contentPlaceholder);
-          this.setTitleHTML(this.props.initialTitleHTML || '');
-          this.setContentHTML(this.props.initialContentHTML || '');
+          this.setContentPlaceholder(this.props.placeholder);
+          this.setContentHTML(this.props.initialHTMLValue || "");
 
-          this.props.hiddenTitle && this.hideTitle();
-          this.props.enableOnChange && this.enableOnChange();
+          this.props.onChange && this.enableOnChange();
 
-          this.props.editorInitializedCallback && this.props.editorInitializedCallback();
+          this.props.onInitialized && this.props.onInitialized();
 
           break;
         case messages.LINK_TOUCHED:
           this.prepareInsert();
-          const {title, url} = message.data;
+          const { title, url } = message.data;
           this.showLinkDialog(title, url);
           break;
         case messages.LOG:
-          console.log('FROM ZSS', message.data);
+          console.log("FROM ZSS", message.data);
           break;
         case messages.SCROLL:
-          this.webview.setNativeProps({contentOffset: {y: message.data}});
-          break;
-        case messages.TITLE_FOCUSED:
-          this.titleFocusHandler && this.titleFocusHandler();
+          if (this.webViewRef) {
+            // @ts-ignore
+            this.webViewRef.setNativeProps({ contentOffset: { y: message.data } });
+          }
           break;
         case messages.CONTENT_FOCUSED:
           this.contentFocusHandler && this.contentFocusHandler();
           break;
         case messages.SELECTION_CHANGE: {
           const items = message.data.items;
-          this.state.selectionChangeListeners.map((listener) => {
+          this.state.selectionChangeListeners?.map(listener => {
             listener(items);
           });
           break;
         }
         case messages.CONTENT_CHANGE: {
-          const content = message.data.content;
-          this.state.onChange.map((listener) => listener(content));
+          const html: string = message.data.html;
+          const text: string = message.data.text;
+          this.state?.onChange?.map(listener => listener(html));
+          if (this.props.onChange) {
+            this.props.onChange(html, text);
+          }
           break;
         }
         case messages.SELECTED_TEXT_CHANGED: {
           const selectedText = message.data;
-          this._selectedTextChangeListeners.forEach((listener) => {
+          this._selectedTextChangeListeners.forEach((listener: any) => {
             listener(selectedText);
           });
           break;
         }
       }
-    } catch(e) {
+    } catch (e) {
       //alert('NON JSON MESSAGE');
     }
   }
 
   _renderLinkModal() {
     return (
-        <Modal
-            animationType={"fade"}
-            transparent
-            visible={this.state.showLinkDialog}
-            onRequestClose={() => this.setState({showLinkDialog: false})}
-        >
-          <View style={styles.modal}>
-            <View style={[styles.innerModal, {marginBottom: PlatformIOS ? this.state.keyboardHeight : 0}]}>
-              <Text style={styles.inputTitle}>Title</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                    style={styles.input}
-                    onChangeText={(text) => this.setState({linkTitle: text})}
-                    value={this.state.linkTitle}
-                />
-              </View>
-              <Text style={[styles.inputTitle ,{marginTop: 10}]}>URL</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                    style={styles.input}
-                    onChangeText={(text) => this.setState({linkUrl: text})}
-                    value={this.state.linkUrl}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                />
-              </View>
-              {PlatformIOS && <View style={styles.lineSeparator}/>}
-              {this._renderModalButtons()}
+      <Modal
+        animationType={"fade"}
+        transparent
+        visible={this.state.showLinkDialog}
+        onRequestClose={() => this.setState({ showLinkDialog: false })}
+      >
+        <View style={styles.modal}>
+          <View style={[styles.innerModal, { marginBottom: PlatformIOS ? this.state.keyboardHeight : 0 }]}>
+            <Text style={styles.inputTitle}>Title</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                onChangeText={text => this.setState({ linkTitle: text })}
+                value={this.state.linkTitle}
+              />
             </View>
+            <Text style={[styles.inputTitle, { marginTop: 10 }]}>URL</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                onChangeText={text => this.setState({ linkUrl: text })}
+                value={this.state.linkUrl}
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            {PlatformIOS && <View style={styles.lineSeparator} />}
+            {this._renderModalButtons()}
           </View>
-        </Modal>
+        </View>
+      </Modal>
     );
   }
 
   _hideModal() {
     this.setState({
       showLinkDialog: false,
-      linkInitialUrl: '',
-      linkTitle: '',
-      linkUrl: ''
-    })
+      linkInitialUrl: "",
+      linkTitle: "",
+      linkUrl: "",
+    });
   }
 
   _renderModalButtons() {
-    const insertUpdateDisabled = this.state.linkTitle.trim().length <= 0 || this.state.linkUrl.trim().length <= 0;
-    const containerPlatformStyle = PlatformIOS ? {justifyContent: 'space-between'} : {paddingTop: 15};
-    const buttonPlatformStyle = PlatformIOS ? {flex: 1, height: 45, justifyContent: 'center'} : {};
+    const insertUpdateDisabled =
+      (this.state?.linkTitle?.trim().length || 0) <= 0 || (this.state?.linkUrl?.trim().length || 0) <= 0;
+    const containerPlatformStyle: ViewStyle[] = [
+      { alignSelf: "stretch", flexDirection: "row" },
+      PlatformIOS ? { justifyContent: "space-between" } : { paddingTop: 15 },
+    ];
+    const buttonPlatformStyle: ViewStyle = PlatformIOS ? { flex: 1, height: 45, justifyContent: "center" } : {};
+    const cancelBtnTextStyle = [styles.button, { paddingRight: 10 }];
+    const upsertBtnTextStyle = [styles.button, { opacity: insertUpdateDisabled ? 0.5 : 1 }];
     return (
-      <View style={[{alignSelf: 'stretch', flexDirection: 'row'}, containerPlatformStyle]}>
-        {!PlatformIOS && <View style={{flex: 1}}/>}
-        <TouchableOpacity
-            onPress={() => this._hideModal()}
-            style={buttonPlatformStyle}
-        >
-          <Text style={[styles.button, {paddingRight: 10}]}>
-            {this._upperCaseButtonTextIfNeeded('Cancel')}
-          </Text>
+      <View style={containerPlatformStyle}>
+        {!PlatformIOS && <View style={styles.flex} />}
+        <TouchableOpacity onPress={() => this._hideModal()} style={buttonPlatformStyle}>
+          <Text style={cancelBtnTextStyle}>{this._upperCaseButtonTextIfNeeded("Cancel")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-            onPress={() => {
-              if (this._linkIsNew()) {
-                this.insertLink(this.state.linkUrl, this.state.linkTitle);
-              } else {
-                this.updateLink(this.state.linkUrl, this.state.linkTitle);
-              }
-              this._hideModal();
-            }}
-            disabled={insertUpdateDisabled}
-            style={buttonPlatformStyle}
+          onPress={() => {
+            if (this._linkIsNew()) {
+              this.insertLink(this.state.linkUrl, this.state.linkTitle);
+            } else {
+              this.updateLink(this.state.linkUrl, this.state.linkTitle);
+            }
+            this._hideModal();
+          }}
+          disabled={insertUpdateDisabled}
+          style={buttonPlatformStyle}
         >
-          <Text style={[styles.button, {opacity: insertUpdateDisabled ? 0.5 : 1}]}>
-            {this._upperCaseButtonTextIfNeeded(this._linkIsNew() ? 'Insert' : 'Update')}
+          <Text style={upsertBtnTextStyle}>
+            {this._upperCaseButtonTextIfNeeded(this._linkIsNew() ? "Insert" : "Update")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -287,21 +294,21 @@ export default class RichTextEditor extends Component {
     return !this.state.linkInitialUrl;
   }
 
-  _upperCaseButtonTextIfNeeded(buttonText) {
+  _upperCaseButtonTextIfNeeded(buttonText: string) {
     return PlatformIOS ? buttonText : buttonText.toUpperCase();
   }
 
   render() {
     //in release build, external html files in Android can't be required, so they must be placed in the assets folder and accessed via uri
-    const pageSource = PlatformIOS ? require('./editor.html') : { uri: 'file:///android_asset/editor.html' };
+    const pageSource = PlatformIOS ? require("./editor.html") : { uri: "file:///android_asset/editor.html" };
     return (
-      <View style={{flex: 1}}>
+      <View style={styles.flex}>
         <WebView
           {...this.props}
           hideKeyboardAccessoryView={true}
           keyboardDisplayRequiresUserAction={false}
-          ref={(r) => {this.webview = r}}
-          onMessage={(message) => this.onMessage(message)}
+          ref={r => (this.webViewRef = r)}
+          onMessage={message => this.onMessage(message)}
           // injectedJavaScript={injectScript}
           source={pageSource}
           onLoad={() => this.init()}
@@ -311,33 +318,35 @@ export default class RichTextEditor extends Component {
     );
   }
 
-  escapeJSONString = function(string) {
-    return string
-      .replace(/[\\]/g, '\\\\')
-      .replace(/[\"]/g, '\\\"')
-      .replace(/[\']/g, '\\\'')
-      .replace(/[\/]/g, '\\/')
-      .replace(/[\b]/g, '\\b')
-      .replace(/[\f]/g, '\\f')
-      .replace(/[\n]/g, '\\n')
-      .replace(/[\r]/g, '\\r')
-      .replace(/[\t]/g, '\\t');
+  escapeJSONString = function(value: string) {
+    return value
+      .replace(/[\\]/g, "\\\\")
+      .replace(/[\"]/g, '\\"')
+      .replace(/[\']/g, "\\'")
+      .replace(/[\/]/g, "\\/")
+      .replace(/[\b]/g, "\\b")
+      .replace(/[\f]/g, "\\f")
+      .replace(/[\n]/g, "\\n")
+      .replace(/[\r]/g, "\\r")
+      .replace(/[\t]/g, "\\t");
   };
 
-  _sendAction(action, data) {
-    let jsToBeExecutedOnPage = MessageConverter({ type: action, data });
-    this.webview.injectJavaScript(jsToBeExecutedOnPage + ';true;');
+  _sendAction(action: string, data?: any) {
+    const jsToBeExecutedOnPage = MessageConverter({ type: action, data });
+    if (this.webViewRef) {
+      this.webViewRef.injectJavaScript(jsToBeExecutedOnPage + ";true;");
+    }
   }
 
   //-------------------------------------------------------------------------------
   //--------------- Public API
 
-  showLinkDialog(optionalTitle = '', optionalUrl = '') {
+  showLinkDialog(optionalTitle: string = "", optionalUrl: string = "") {
     this.setState({
       linkInitialUrl: optionalUrl,
       linkTitle: optionalTitle,
       linkUrl: optionalUrl,
-      showLinkDialog: true
+      showLinkDialog: true,
     });
   }
 
@@ -349,9 +358,9 @@ export default class RichTextEditor extends Component {
     this._sendAction(actions.focusContent);
   }
 
-  registerToolbar(listener) {
+  registerToolbar(listener: any) {
     this.setState({
-      selectionChangeListeners: [...this.state.selectionChangeListeners, listener]
+      selectionChangeListeners: [...(this.state.selectionChangeListeners || []), listener],
     });
   }
 
@@ -359,13 +368,13 @@ export default class RichTextEditor extends Component {
     this._sendAction(actions.enableOnChange);
   }
 
-  registerContentChangeListener(listener) {
+  registerContentChangeListener(listener: any) {
     this.setState({
-      onChange: [...this.state.onChange, listener]
+      onChange: [...(this.state.onChange || []), listener],
     });
   }
 
-  setTitleHTML(html) {
+  setTitleHTML(html: string) {
     this._sendAction(actions.setTitleHtml, html);
   }
   hideTitle() {
@@ -377,7 +386,7 @@ export default class RichTextEditor extends Component {
   toggleTitle() {
     this._sendAction(actions.toggleTitle);
   }
-  setContentHTML(html) {
+  setContentHTML(html: string) {
     this._sendAction(actions.setContentHtml, html);
   }
 
@@ -457,15 +466,15 @@ export default class RichTextEditor extends Component {
     this._sendAction(actions.insertOrderedList);
   }
 
-  insertLink(url, title) {
-    this._sendAction(actions.insertLink, {url, title});
+  insertLink(url?: string, title?: string) {
+    this._sendAction(actions.insertLink, { url, title });
   }
 
-  updateLink(url, title) {
-    this._sendAction(actions.updateLink, {url, title});
+  updateLink(url?: string, title?: string) {
+    this._sendAction(actions.updateLink, { url, title });
   }
 
-  insertImage(attributes) {
+  insertImage(attributes: any) {
     this._sendAction(actions.insertImage, attributes);
     this.prepareInsert(); //This must be called BEFORE insertImage. But WebViewBridge uses a stack :/
   }
@@ -494,23 +503,19 @@ export default class RichTextEditor extends Component {
     this._sendAction(actions.setOutdent);
   }
 
-  setBackgroundColor(color) {
+  setBackgroundColor(color: string) {
     this._sendAction(actions.setBackgroundColor, color);
   }
 
-  setTextColor(color) {
+  setTextColor(color: string) {
     this._sendAction(actions.setTextColor, color);
   }
 
-  setTitlePlaceholder(placeholder) {
-    this._sendAction(actions.setTitlePlaceholder, placeholder);
-  }
-
-  setContentPlaceholder(placeholder) {
+  setContentPlaceholder(placeholder?: string) {
     this._sendAction(actions.setContentPlaceholder, placeholder);
   }
 
-  setCustomCSS(css) {
+  setCustomCSS(css: string) {
     this._sendAction(actions.setCustomCSS, css);
   }
 
@@ -530,7 +535,7 @@ export default class RichTextEditor extends Component {
     }
   }
 
-  setEditorHeight(height) {
+  setEditorHeight(height: number) {
     this._sendAction(actions.setEditorHeight, height);
   }
 
@@ -542,6 +547,10 @@ export default class RichTextEditor extends Component {
     this._sendAction(actions.setPlatform, Platform.OS);
   }
 
+  titleResolve?: any;
+  titleReject?: any;
+  pendingTitleHtml?: number;
+
   async getTitleHtml() {
     return new Promise((resolve, reject) => {
       this.titleResolve = resolve;
@@ -550,11 +559,15 @@ export default class RichTextEditor extends Component {
 
       this.pendingTitleHtml = setTimeout(() => {
         if (this.titleReject) {
-          this.titleReject('timeout')
+          this.titleReject("timeout");
         }
       }, 5000);
     });
   }
+
+  titleTextResolve?: any;
+  titleTextReject?: any;
+  pendingTitleText?: number;
 
   async getTitleText() {
     return new Promise((resolve, reject) => {
@@ -564,7 +577,7 @@ export default class RichTextEditor extends Component {
 
       this.pendingTitleText = setTimeout(() => {
         if (this.titleTextReject) {
-          this.titleTextReject('timeout');
+          this.titleTextReject("timeout");
         }
       }, 5000);
     });
@@ -578,7 +591,7 @@ export default class RichTextEditor extends Component {
 
       this.pendingContentHtml = setTimeout(() => {
         if (this.contentReject) {
-          this.contentReject('timeout')
+          this.contentReject("timeout");
         }
       }, 5000);
     });
@@ -592,67 +605,74 @@ export default class RichTextEditor extends Component {
 
       this.pendingSelectedText = setTimeout(() => {
         if (this.selectedTextReject) {
-          this.selectedTextReject('timeout')
+          this.selectedTextReject("timeout");
         }
       }, 5000);
     });
   }
 
-  setTitleFocusHandler(callbackHandler) {
+  titleFocusHandler?: any;
+
+  setTitleFocusHandler(callbackHandler: any) {
     this.titleFocusHandler = callbackHandler;
     this._sendAction(actions.setTitleFocusHandler);
   }
 
-  setContentFocusHandler(callbackHandler) {
+  contentFocusHandler?: () => {} = undefined;
+
+  setContentFocusHandler(callbackHandler: () => {}) {
     this.contentFocusHandler = callbackHandler;
     this._sendAction(actions.setContentFocusHandler);
   }
 
-  addSelectedTextChangeListener(listener) {
+  addSelectedTextChangeListener(listener: any) {
     this._selectedTextChangeListeners.push(listener);
   }
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   modal: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)'
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   innerModal: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     paddingTop: 20,
     paddingBottom: PlatformIOS ? 0 : 20,
     paddingLeft: 20,
     paddingRight: 20,
-    alignSelf: 'stretch',
+    alignSelf: "stretch",
     margin: 40,
-    borderRadius: PlatformIOS ? 8 : 2
+    borderRadius: PlatformIOS ? 8 : 2,
   },
   button: {
     fontSize: 16,
-    color: '#4a4a4a',
-    textAlign: 'center'
+    color: "#4a4a4a",
+    textAlign: "center",
   },
   inputWrapper: {
     marginTop: 5,
     marginBottom: 10,
-    borderBottomColor: '#4a4a4a',
-    borderBottomWidth: PlatformIOS ? 1 / PixelRatio.get() : 0
+    borderBottomColor: "#4a4a4a",
+    borderBottomWidth: PlatformIOS ? 1 / PixelRatio.get() : 0,
   },
   inputTitle: {
-    color: '#4a4a4a'
+    color: "#4a4a4a",
   },
   input: {
     height: PlatformIOS ? 20 : 40,
-    paddingTop: 0
+    paddingTop: 0,
   },
   lineSeparator: {
     height: 1 / PixelRatio.get(),
-    backgroundColor: '#d5d5d5',
+    backgroundColor: "#d5d5d5",
     marginLeft: -20,
     marginRight: -20,
-    marginTop: 20
-  }
+    marginTop: 20,
+  },
 });

@@ -1,13 +1,15 @@
-import {actions, messages} from './const';
+import { actions, messages } from "./constants";
 
-export const MessageConverter = (action) => {
-  switch(action.type) {
+export type MessageConverterAction = { type: string; data: any };
+
+export const MessageConverter = (action: MessageConverterAction) => {
+  switch (action.type) {
     case `${actions.init}`:
-      return 'zss_editor.init();';
+      return "zss_editor.init();";
     case `${actions.setPlatform}`:
       return `zss_editor.setPlatform('${action.data}');`;
     case `${actions.enableOnChange}`:
-      return 'zss_editor.enableOnChange()';
+      return "zss_editor.enableOnChange()";
     case `${actions.setTitleHtml}`:
       return `zss_editor.setTitleHTML('${action.data}');`;
     case `${actions.toggleTitle}`:
@@ -90,8 +92,6 @@ export const MessageConverter = (action) => {
       return `zss_editor.setCustomCSS('${action.data}');`;
     case `${actions.setTextColor}`:
       return `zss_editor.setTextColor('${action.data}');`;
-    case `${actions.setFontSize}`:
-      return `zss_editor.setFontSize('${action.data}');`;
     case `${actions.setBackgroundColor}`:
       return `zss_editor.setBackgroundColor('${action.data}');`;
     case `${actions.setEditorHeight}`:
@@ -104,15 +104,15 @@ export const MessageConverter = (action) => {
       return `zss_editor.setContentFocusHandler();`;
     case `${actions.getTitleHtml}`:
       return `var html = zss_editor.getTitleHTML();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_HTML_RESPONSE}', data: html}));`
+      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_HTML_RESPONSE}', data: html}));`;
     case `${actions.getTitleText}`:
       return `var html = zss_editor.getTitleText();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_TEXT_RESPONSE}', data: html}));`
+      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_TEXT_RESPONSE}', data: html}));`;
     case `${actions.getContentHtml}`:
       return `var html = zss_editor.getContentHTML();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.CONTENT_HTML_RESPONSE}', data: html}));`
+      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.CONTENT_HTML_RESPONSE}', data: html}));`;
     case `${actions.getSelectedText}`:
       return `var selectedText = getSelection().toString();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.SELECTED_TEXT_RESPONSE}', data: selectedText}));`
+      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.SELECTED_TEXT_RESPONSE}', data: selectedText}));`;
   }
 };
