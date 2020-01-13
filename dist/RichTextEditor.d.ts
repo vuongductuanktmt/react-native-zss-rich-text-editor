@@ -7,12 +7,12 @@ declare type PropTypes = {
     placeholder?: string;
     onInitialized?: () => {};
     customCSS?: string;
-    footerHeight: number;
-    contentInset: {
+    footerHeight?: number;
+    contentInset?: {
         top?: number;
         bottom?: number;
     };
-    style: {
+    style?: {
         marginTop?: number;
         marginBottom?: number;
     };

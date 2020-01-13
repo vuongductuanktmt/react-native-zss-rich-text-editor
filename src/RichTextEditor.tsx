@@ -25,9 +25,9 @@ type PropTypes = {
   placeholder?: string;
   onInitialized?: () => {};
   customCSS?: string;
-  footerHeight: number;
-  contentInset: { top?: number; bottom?: number };
-  style: { marginTop?: number; marginBottom?: number };
+  footerHeight?: number;
+  contentInset?: { top?: number; bottom?: number };
+  style?: { marginTop?: number; marginBottom?: number };
   onChange?: (html: string, text: string) => {};
 };
 
@@ -106,8 +106,8 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
   }
 
   setEditorAvailableHeightBasedOnKeyboardHeight(keyboardHeight: number) {
-    const { top = 0, bottom = 0 } = this.props.contentInset;
-    const { marginTop = 0, marginBottom = 0 } = this.props.style;
+    const { top = 0, bottom = 0 } = this.props.contentInset || {};
+    const { marginTop = 0, marginBottom = 0 } = this.props.style || {};
     const spacing = marginTop + marginBottom + top + bottom;
 
     const editorAvailableHeight = Dimensions.get("window").height - keyboardHeight - spacing;
