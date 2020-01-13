@@ -1,6 +1,6 @@
 # typscript
-#
-dist
+# Uncomment the dist folder if we publish
+# dist
 
 # lock file
 yarn.lock
