@@ -25,7 +25,7 @@ $ react-native run-ios
 ## Installation
 
 * `$ yarn add https://github.com/boreal-is/react-native-zss-rich-text-editor`
-* `$ yarn add react-native-webview` (I'm not sure why I have to do this)
+* `$ yarn add react-native-webview` (I'm not sure why I have to do this. But if you use this library in your project, you have an error about duplicate view declaration.)
 * `$ cd ios; pod install;`
 
 On Android, add the following to the end of your `android/app/build.gradle`

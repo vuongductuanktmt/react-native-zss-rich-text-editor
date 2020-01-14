@@ -13,9 +13,7 @@
     "ts-compile": "tsc --build tsconfig.json && yarn copy-extra",
     "copy-extra": "cp ./src/*.html ./dist"
   },
-  "dependencies": {
-    "react-native-webview": "^8.0.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@babel/core": "^7.6.2",
     "@babel/runtime": "^7.6.2",
