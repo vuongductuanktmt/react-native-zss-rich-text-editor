@@ -1,7 +1,7 @@
 import { Component } from "react";
 import PropTypes from "prop-types";
 import WebView, { WebViewMessageEvent } from "react-native-webview";
-import { EmitterSubscription } from "react-native";
+import { EmitterSubscription, ViewStyle } from "react-native";
 declare type PropTypes = {
     initialHTMLValue?: string;
     placeholder?: string;
@@ -12,16 +12,13 @@ declare type PropTypes = {
         top?: number;
         bottom?: number;
     };
-    style?: {
-        marginTop?: number;
-        marginBottom?: number;
-    };
+    style?: ViewStyle;
     onChange?: (html: string, text: string) => {};
 };
 declare type StateType = {
     selectionChangeListeners?: any[];
     onChange?: any[];
-    showLinkDialog?: boolean;
+    showLinkDialog: boolean;
     linkInitialUrl?: string;
     linkTitle?: string;
     linkUrl?: string;
@@ -30,7 +27,6 @@ declare type StateType = {
 export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     static defaultProps: {
         contentInset: {};
-        style: {};
     };
     webViewRef: WebView | null;
     _selectedTextChangeListeners: any;
@@ -48,26 +44,16 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     selectedTextReject?: any;
     pendingSelectedText?: number;
     onMessage(message: WebViewMessageEvent): void;
-    _renderLinkModal(): JSX.Element;
     _hideModal(): void;
-    _renderModalButtons(): JSX.Element;
-    _linkIsNew(): boolean;
-    _upperCaseButtonTextIfNeeded(buttonText: string): string;
+    handleOnApply: (linkTitle: string, linkUrl: string) => void;
     render(): JSX.Element;
-    escapeJSONString: (value: string) => string;
     _sendAction(action: string, data?: any): void;
     showLinkDialog(optionalTitle?: string, optionalUrl?: string): void;
-    focusTitle(): void;
     focusContent(): void;
     registerToolbar(listener: any): void;
     enableOnChange(): void;
     registerContentChangeListener(listener: any): void;
-    setTitleHTML(html: string): void;
-    hideTitle(): void;
-    showTitle(): void;
-    toggleTitle(): void;
     setContentHTML(html: string): void;
-    blurTitleEditor(): void;
     blurContentEditor(): void;
     setBold(): void;
     setItalic(): void;
@@ -105,18 +91,8 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     setEditorHeight(height: number): void;
     setFooterHeight(): void;
     setPlatform(): void;
-    titleResolve?: any;
-    titleReject?: any;
-    pendingTitleHtml?: number;
-    getTitleHtml(): Promise<unknown>;
-    titleTextResolve?: any;
-    titleTextReject?: any;
-    pendingTitleText?: number;
-    getTitleText(): Promise<unknown>;
     getContentHtml(): Promise<unknown>;
     getSelectedText(): Promise<unknown>;
-    titleFocusHandler?: any;
-    setTitleFocusHandler(callbackHandler: any): void;
     contentFocusHandler?: () => {};
     setContentFocusHandler(callbackHandler: () => {}): void;
     addSelectedTextChangeListener(listener: any): void;

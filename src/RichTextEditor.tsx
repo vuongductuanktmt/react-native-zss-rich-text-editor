@@ -3,20 +3,8 @@ import PropTypes from "prop-types";
 import WebView, { WebViewMessageEvent } from "react-native-webview";
 import { MessageConverter } from "./WebviewMessageHandler";
 import { actions, messages } from "./constants";
-import {
-  Dimensions,
-  EmitterSubscription,
-  Keyboard,
-  Modal,
-  PixelRatio,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ViewStyle,
-} from "react-native";
+import { Dimensions, EmitterSubscription, Keyboard, Platform, StyleSheet, View, ViewStyle } from "react-native";
+import RichTextLinkModal from "./RichTextLinkModal";
 
 const PlatformIOS = Platform.OS === "ios";
 
@@ -27,14 +15,14 @@ type PropTypes = {
   customCSS?: string;
   footerHeight?: number;
   contentInset?: { top?: number; bottom?: number };
-  style?: { marginTop?: number; marginBottom?: number };
+  style?: ViewStyle;
   onChange?: (html: string, text: string) => {};
 };
 
 type StateType = {
   selectionChangeListeners?: any[];
   onChange?: any[];
-  showLinkDialog?: boolean;
+  showLinkDialog: boolean;
   linkInitialUrl?: string;
   linkTitle?: string;
   linkUrl?: string;
@@ -44,7 +32,6 @@ type StateType = {
 export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
   static defaultProps = {
     contentInset: {},
-    style: {},
   };
 
   webViewRef: WebView | null = null;
@@ -107,7 +94,8 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
 
   setEditorAvailableHeightBasedOnKeyboardHeight(keyboardHeight: number) {
     const { top = 0, bottom = 0 } = this.props.contentInset || {};
-    const { marginTop = 0, marginBottom = 0 } = this.props.style || {};
+    const marginTop = parseInt(this.props?.style?.marginTop?.toString() || "0");
+    const marginBottom = parseInt(this.props.style?.marginBottom?.toString() || "0");
     const spacing = marginTop + marginBottom + top + bottom;
 
     const editorAvailableHeight = Dimensions.get("window").height - keyboardHeight - spacing;
@@ -151,16 +139,11 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
           }
           break;
         case messages.ZSS_INITIALIZED:
-          if (this.props.customCSS) {
-            this.setCustomCSS(this.props.customCSS);
-          }
-          this.setContentPlaceholder(this.props.placeholder);
-          this.setContentHTML(this.props.initialHTMLValue || "");
-
+          this.props.customCSS && this.setCustomCSS(this.props.customCSS);
+          this.props.placeholder && this.setContentPlaceholder(this.props.placeholder);
+          this.props.initialHTMLValue && this.setContentHTML(this.props.initialHTMLValue);
           this.props.onChange && this.enableOnChange();
-
           this.props.onInitialized && this.props.onInitialized();
-
           break;
         case messages.LINK_TOUCHED:
           this.prepareInsert();
@@ -208,43 +191,6 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     }
   }
 
-  _renderLinkModal() {
-    return (
-      <Modal
-        animationType={"fade"}
-        transparent
-        visible={this.state.showLinkDialog}
-        onRequestClose={() => this.setState({ showLinkDialog: false })}
-      >
-        <View style={styles.modal}>
-          <View style={[styles.innerModal, { marginBottom: PlatformIOS ? this.state.keyboardHeight : 0 }]}>
-            <Text style={styles.inputTitle}>Title</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                onChangeText={text => this.setState({ linkTitle: text })}
-                value={this.state.linkTitle}
-              />
-            </View>
-            <Text style={[styles.inputTitle, { marginTop: 10 }]}>URL</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                onChangeText={text => this.setState({ linkUrl: text })}
-                value={this.state.linkUrl}
-                keyboardType="url"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-            {PlatformIOS && <View style={styles.lineSeparator} />}
-            {this._renderModalButtons()}
-          </View>
-        </View>
-      </Modal>
-    );
-  }
-
   _hideModal() {
     this.setState({
       showLinkDialog: false,
@@ -254,49 +200,14 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     });
   }
 
-  _renderModalButtons() {
-    const insertUpdateDisabled =
-      (this.state?.linkTitle?.trim().length || 0) <= 0 || (this.state?.linkUrl?.trim().length || 0) <= 0;
-    const containerPlatformStyle: ViewStyle[] = [
-      { alignSelf: "stretch", flexDirection: "row" },
-      PlatformIOS ? { justifyContent: "space-between" } : { paddingTop: 15 },
-    ];
-    const buttonPlatformStyle: ViewStyle = PlatformIOS ? { flex: 1, height: 45, justifyContent: "center" } : {};
-    const cancelBtnTextStyle = [styles.button, { paddingRight: 10 }];
-    const upsertBtnTextStyle = [styles.button, { opacity: insertUpdateDisabled ? 0.5 : 1 }];
-    return (
-      <View style={containerPlatformStyle}>
-        {!PlatformIOS && <View style={styles.flex} />}
-        <TouchableOpacity onPress={() => this._hideModal()} style={buttonPlatformStyle}>
-          <Text style={cancelBtnTextStyle}>{this._upperCaseButtonTextIfNeeded("Cancel")}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            if (this._linkIsNew()) {
-              this.insertLink(this.state.linkUrl, this.state.linkTitle);
-            } else {
-              this.updateLink(this.state.linkUrl, this.state.linkTitle);
-            }
-            this._hideModal();
-          }}
-          disabled={insertUpdateDisabled}
-          style={buttonPlatformStyle}
-        >
-          <Text style={upsertBtnTextStyle}>
-            {this._upperCaseButtonTextIfNeeded(this._linkIsNew() ? "Insert" : "Update")}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  _linkIsNew() {
-    return !this.state.linkInitialUrl;
-  }
-
-  _upperCaseButtonTextIfNeeded(buttonText: string) {
-    return PlatformIOS ? buttonText : buttonText.toUpperCase();
-  }
+  handleOnApply = (linkTitle: string, linkUrl: string) => {
+    if (!this.state.linkInitialUrl) {
+      this.insertLink(linkUrl, linkTitle);
+    } else {
+      this.updateLink(linkUrl, linkTitle);
+    }
+    this._hideModal();
+  };
 
   render() {
     //in release build, external html files in Android can't be required, so they must be placed in the assets folder and accessed via uri
@@ -313,23 +224,18 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
           source={pageSource}
           onLoad={() => this.init()}
         />
-        {this._renderLinkModal()}
+        <RichTextLinkModal
+          visible={this.state.showLinkDialog}
+          keyboardHeight={this.state.keyboardHeight}
+          linkTitle={this.state.linkTitle}
+          linkUrl={this.state.linkUrl}
+          onApply={this.handleOnApply}
+          onHideModal={this._hideModal}
+          onRequestClose={this._hideModal}
+        />
       </View>
     );
   }
-
-  escapeJSONString = function(value: string) {
-    return value
-      .replace(/[\\]/g, "\\\\")
-      .replace(/[\"]/g, '\\"')
-      .replace(/[\']/g, "\\'")
-      .replace(/[\/]/g, "\\/")
-      .replace(/[\b]/g, "\\b")
-      .replace(/[\f]/g, "\\f")
-      .replace(/[\n]/g, "\\n")
-      .replace(/[\r]/g, "\\r")
-      .replace(/[\t]/g, "\\t");
-  };
 
   _sendAction(action: string, data?: any) {
     const jsToBeExecutedOnPage = MessageConverter({ type: action, data });
@@ -348,10 +254,6 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
       linkUrl: optionalUrl,
       showLinkDialog: true,
     });
-  }
-
-  focusTitle() {
-    this._sendAction(actions.focusTitle);
   }
 
   focusContent() {
@@ -374,24 +276,8 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     });
   }
 
-  setTitleHTML(html: string) {
-    this._sendAction(actions.setTitleHtml, html);
-  }
-  hideTitle() {
-    this._sendAction(actions.hideTitle);
-  }
-  showTitle() {
-    this._sendAction(actions.showTitle);
-  }
-  toggleTitle() {
-    this._sendAction(actions.toggleTitle);
-  }
   setContentHTML(html: string) {
     this._sendAction(actions.setContentHtml, html);
-  }
-
-  blurTitleEditor() {
-    this._sendAction(actions.blurTitleEditor);
   }
 
   blurContentEditor() {
@@ -547,42 +433,6 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     this._sendAction(actions.setPlatform, Platform.OS);
   }
 
-  titleResolve?: any;
-  titleReject?: any;
-  pendingTitleHtml?: number;
-
-  async getTitleHtml() {
-    return new Promise((resolve, reject) => {
-      this.titleResolve = resolve;
-      this.titleReject = reject;
-      this._sendAction(actions.getTitleHtml);
-
-      this.pendingTitleHtml = setTimeout(() => {
-        if (this.titleReject) {
-          this.titleReject("timeout");
-        }
-      }, 5000);
-    });
-  }
-
-  titleTextResolve?: any;
-  titleTextReject?: any;
-  pendingTitleText?: number;
-
-  async getTitleText() {
-    return new Promise((resolve, reject) => {
-      this.titleTextResolve = resolve;
-      this.titleTextReject = reject;
-      this._sendAction(actions.getTitleText);
-
-      this.pendingTitleText = setTimeout(() => {
-        if (this.titleTextReject) {
-          this.titleTextReject("timeout");
-        }
-      }, 5000);
-    });
-  }
-
   async getContentHtml() {
     return new Promise((resolve, reject) => {
       this.contentResolve = resolve;
@@ -611,13 +461,6 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     });
   }
 
-  titleFocusHandler?: any;
-
-  setTitleFocusHandler(callbackHandler: any) {
-    this.titleFocusHandler = callbackHandler;
-    this._sendAction(actions.setTitleFocusHandler);
-  }
-
   contentFocusHandler?: () => {} = undefined;
 
   setContentFocusHandler(callbackHandler: () => {}) {
@@ -633,46 +476,5 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-  },
-  modal: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  innerModal: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingTop: 20,
-    paddingBottom: PlatformIOS ? 0 : 20,
-    paddingLeft: 20,
-    paddingRight: 20,
-    alignSelf: "stretch",
-    margin: 40,
-    borderRadius: PlatformIOS ? 8 : 2,
-  },
-  button: {
-    fontSize: 16,
-    color: "#4a4a4a",
-    textAlign: "center",
-  },
-  inputWrapper: {
-    marginTop: 5,
-    marginBottom: 10,
-    borderBottomColor: "#4a4a4a",
-    borderBottomWidth: PlatformIOS ? 1 / PixelRatio.get() : 0,
-  },
-  inputTitle: {
-    color: "#4a4a4a",
-  },
-  input: {
-    height: PlatformIOS ? 20 : 40,
-    paddingTop: 0,
-  },
-  lineSeparator: {
-    height: 1 / PixelRatio.get(),
-    backgroundColor: "#d5d5d5",
-    marginLeft: -20,
-    marginRight: -20,
-    marginTop: 20,
   },
 });

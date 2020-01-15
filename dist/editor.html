@@ -171,7 +171,6 @@
                     zss_editor.updateOffset();
                 }
             });
-            setupTouchEndFocus('zss_editor_content');
             setCurrentEditingLinkOnTouch();
             preventLinkFollowingOnTouch();
             whenPastingInsertAsPlainText('zss_editor_content');
@@ -593,7 +592,7 @@
 
         function setHTML(editorId, html) {
             let editor = $('#' + editorId);
-            editor.html(html);
+            editor.html(html || "");
         }
 
         zss_editor.enableOnChange = function () {
@@ -833,7 +832,6 @@
         }
 
         body {
-            padding:0;
             overflow-y: scroll;
             -webkit-overflow-scrolling: touch;
             height: 100%;
@@ -859,11 +857,6 @@
             overflow: auto;
         }
 
-        #zss_editor_content {
-            padding-left: 10px;
-            padding-right: 10px;
-        }
-
         [placeholder]:empty:before {
             content: attr(placeholder);
             color: #e0e0e0;
@@ -878,12 +871,6 @@
             border: none;
             height: 1px;
             background-color: #e7e7e7;
-        }
-
-        #separatorContainer {
-            -webkit-user-select: none;
-            padding-left: 10px;
-            padding-right: 10px;
         }
     </style>
 
