@@ -63,6 +63,8 @@
 
         let zss_editor = {};
 
+        zss_editor.id = "zss_editor_content";
+
         // If we are using iOS or desktop
         zss_editor.isUsingiOS = true;
 
@@ -91,8 +93,8 @@
          * The initializer function that must be called onLoad
          */
 
-        function setupTouchEndEnableEditing(editorId) {
-            $('#' + editorId).on('touchend', function (e) {
+        function setupTouchEndEnableEditing() {
+            $('#' + zss_editor.id).on('touchend', function (e) {
                 zss_editor.enabledEditingItems(e);
                 let clicked = $(e.target);
                 if (!clicked.hasClass('zs_active')) {
@@ -101,16 +103,16 @@
             });
         }
 
-        function setupTouchEndFocus(editorId) {
+        function setupTouchEndFocus() {
             $(window).on('touchend', function (e) {
                 if (!zss_editor.isDragging && (e.target.id === "zss_editor_footer" || e.target.nodeName.toLowerCase() === "html")) {
-                    zss_editor.focusEditor(editorId);
+                    zss_editor.focusEditor();
                 }
             });
         }
 
-        function disableLineBreakIfNecessary(editorId) {
-            let editor = $('#' + editorId);
+        function disableLineBreakIfNecessary() {
+            let editor = $('#' + zss_editor.id);
             let disableLineBreaks = editor.attr("disableLineBreaks");
             if (disableLineBreaks) {
                 editor.keypress(function (e) {
@@ -120,25 +122,25 @@
         }
 
         function setCurrentEditingLinkOnTouch() {
-            $('#zss_editor_content').delegate('a', 'touchend', function (event) {
+            $('#' + zss_editor.id).delegate('a', 'touchend', function (event) {
                 let anchor = $(event.currentTarget);
                 zss_editor.currentEditingLink = anchor;
                 let link = {
                     title: anchor.text(),
                     url: anchor.attr('href')
                 };
-                ReactNativeWebView.postMessage(JSON.stringify({type: 'LINK_TOUCHED', data: link}))
+                sendMessage({type: 'LINK_TOUCHED', data: link})
             });
         }
 
         function preventLinkFollowingOnTouch() {
-            $('#zss_editor_content').delegate('a', 'click touchend', function (event) {
+            $('#' + zss_editor.id).delegate('a', 'click touchend', function (event) {
                 event.preventDefault();
             });
         }
 
-        function clearHtmlIfTextIsEmpty(editorId) {
-            let $editor = $('#' + editorId);
+        function clearHtmlIfTextIsEmpty() {
+            let $editor = $('#' + zss_editor.id);
             $editor.on('input', function () {
                 if (!(this.textContent || this.querySelectorAll('img, li').length)) {
                     this.innerHTML = '';
@@ -146,10 +148,15 @@
             });
         }
 
+        function sendMessage(messageJson) {
+            const msg = typeof messageJson === 'string' ? messageJson : JSON.stringify(messageJson);
+            ReactNativeWebView.postMessage(msg);
+        }
+
         zss_editor.init = function () {
-            disableLineBreakIfNecessary('zss_editor_content');
-            setupTouchEndEnableEditing('zss_editor_content');
-            clearHtmlIfTextIsEmpty('zss_editor_content');
+            disableLineBreakIfNecessary();
+            setupTouchEndEnableEditing();
+            clearHtmlIfTextIsEmpty();
             $(document).on('selectionchange', function (e) {
                 zss_editor.calculateEditorHeightWithCaretPosition();
                 zss_editor.setScrollPosition();
@@ -173,9 +180,9 @@
             });
             setCurrentEditingLinkOnTouch();
             preventLinkFollowingOnTouch();
-            whenPastingInsertAsPlainText('zss_editor_content');
+            whenPastingInsertAsPlainText();
             setTimeout(function () {
-                ReactNativeWebView.postMessage(JSON.stringify({type: 'ZSS_INITIALIZED'}))
+                sendMessage({type: 'ZSS_INITIALIZED'})
             }, 20);
 
         }; //end
@@ -186,13 +193,13 @@
                 type: 'SELECTED_TEXT_CHANGED'
             });
             if (selectedTextChangeMessage !== zss_editor.previousSelectedTextChangeMessage) {
-                ReactNativeWebView.postMessage(selectedTextChangeMessage);
+                sendMessage(selectedTextChangeMessage);
                 zss_editor.previousSelectedTextChangeMessage = selectedTextChangeMessage;
             }
         }
 
-        function whenPastingInsertAsPlainText(editorId) {
-            let editor = document.getElementById(editorId);
+        function whenPastingInsertAsPlainText() {
+            let editor = document.getElementById(zss_editor.id);
             editor.addEventListener('paste', function (event) {
                 event.preventDefault();
                 let text = event.clipboardData.getData('text/plain');
@@ -234,17 +241,17 @@
 
         // This will show up in the XCode console as we are able to push this into an NSLog.
         zss_editor.debug = function (msg) {
-            ReactNativeWebView.postMessage(JSON.stringify({type: 'LOG', data: msg}));
+            sendMessage({type: 'LOG', data: msg});
         };
 
 
         zss_editor.setScrollPosition = function () {
             let position = window.pageYOffset;
-            ReactNativeWebView.postMessage(JSON.stringify({type: 'SCROLL', data: position}));
+            sendMessage({type: 'SCROLL', data: position});
         };
 
-        function setPlaceholder(editorId, placeholder) {
-            let editor = $('#' + editorId);
+        function setPlaceholder(placeholder) {
+            let editor = $('#' + zss_editor.id);
             //set placeHolder
             editor.attr("placeholder", placeholder);
             //set focus
@@ -257,7 +264,7 @@
         }
 
         zss_editor.setContentPlaceholder = function (placeholder) {
-            setPlaceholder('zss_editor_content', placeholder);
+            setPlaceholder(placeholder);
         };
 
         zss_editor.setFooterHeight = function (footerHeight) {
@@ -590,22 +597,28 @@
             zss_editor.enabledEditingItems();
         };
 
-        function setHTML(editorId, html) {
-            let editor = $('#' + editorId);
+        function setHTML(html) {
+            let editor = $('#' + zss_editor.id);
             editor.html(html || "");
+
         }
 
         zss_editor.enableOnChange = function () {
-            $('#zss_editor_content').on('input', function () {
-                ReactNativeWebView.postMessage(JSON.stringify({
+            $('#' + zss_editor.id).on('change', function () {
+                sendMessage({
                     type: 'CONTENT_CHANGE',
-                    data: {html: getHtml("zss_editor_content"), text: getText("zss_editor_content")}
-                }))
+                    data: {
+                        html: getHtml("zss_editor_content"),
+                        text: getText("zss_editor_content"),
+                        height: getEditorHeight()
+                    }
+                })
             });
         };
 
         zss_editor.setContentHTML = function (html) {
-            setHTML('zss_editor_content', html);
+            setHTML(unescape(html));
+            $('#' + zss_editor.id).change();
         };
 
         zss_editor.insertHTML = function (html) {
@@ -613,7 +626,11 @@
             zss_editor.enabledEditingItems();
         };
 
-        function getHtml(editorId) {
+        function getEditorHeight() {
+            return $("#" + zss_editor.id).innerHeight();
+        }
+
+        function getHtml() {
             // Images
             let img = $('img');
             if (img.length !== 0) {
@@ -643,15 +660,15 @@
             }
 
             // Get the contents
-            return document.getElementById(editorId).innerHTML;
+            return document.getElementById(zss_editor.id).innerHTML;
         }
 
         zss_editor.getContentHTML = function () {
-            return getHtml("zss_editor_content");
+            return getHtml();
         };
 
-        function getText(editorId) {
-            let html = getHtml(editorId);
+        function getText() {
+            let html = getHtml();
             html = html.replace(/\<\/p>/g, '</p>\r\n');
             html = html.replace(/\<\/b>/g, '</b>\r\n');
             html = html.replace(/\<\/li>/g, '</li>\r\n');
@@ -659,7 +676,7 @@
         }
 
         zss_editor.getContentText = function () {
-            return getText('#zss_editor_content');
+            return getText();
         };
 
         zss_editor.isCommandEnabled = function (commandName) {
@@ -763,7 +780,7 @@
                 type: 'SELECTION_CHANGE'
             });
             if (selectionChangeMessage !== zss_editor.previousSelectionChangeMessage) {
-                ReactNativeWebView.postMessage(selectionChangeMessage);
+                sendMessage(selectionChangeMessage);
                 zss_editor.previousSelectionChangeMessage = selectionChangeMessage;
             }
         }
@@ -772,10 +789,10 @@
             $('#zss_editor_content').focus();
         };
 
-        zss_editor.focusEditor = function (editorId) {
+        zss_editor.focusEditor = function () {
             // the following was taken from http://stackoverflow.com/questions/1125292/how-to-move-cursor-to-end-of-contenteditable-entity/3866442#3866442
             // and ensures we move the cursor to the end of the editor
-            let editor = $('#' + editorId);
+            let editor = $('#' + zss_editor.id);
             let range = document.createRange();
             range.selectNodeContents(editor.get(0));
             range.collapse(false);
@@ -793,15 +810,14 @@
             document.getElementsByTagName('style')[1].innerHTML = customCSS;
         };
 
-        function addFocusEvent(editorId, callbackHandler) {
-            let editor = $('#' + editorId);
-            editor.focus(callbackHandler);
-        }
+        zss_editor.enableOnFocus = function () {
+            let editor = $('#' + zss_editor.id);
+            editor.focus(() => sendMessage({type: 'FOCUSED'}));
+        };
 
-        zss_editor.setContentFocusHandler = function () {
-            addFocusEvent('zss_editor_content', function () {
-                ReactNativeWebView.postMessage(JSON.stringify({type: 'CONTENT_FOCUSED'}))
-            });
+        zss_editor.enableOnBlur = function () {
+            let editor = $('#' + zss_editor.id);
+            editor.blur(() => sendMessage({type: 'BLURRED'}));
         };
 
         zss_editor.setEditorHeight = function (editorHeight) {

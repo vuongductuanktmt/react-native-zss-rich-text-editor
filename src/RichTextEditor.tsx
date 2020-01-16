@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { Component, RefObject } from "react";
 import PropTypes from "prop-types";
 import WebView, { WebViewMessageEvent } from "react-native-webview";
 import { MessageConverter } from "./WebviewMessageHandler";
@@ -7,20 +7,30 @@ import { Dimensions, EmitterSubscription, Keyboard, Platform, StyleSheet, View, 
 import RichTextLinkModal from "./RichTextLinkModal";
 
 const PlatformIOS = Platform.OS === "ios";
+//in release build, external html files in Android can't be required, so they must be placed in the assets folder and accessed via uri
+const pageSource = PlatformIOS ? require("./editor.html") : { uri: "file:///android_asset/editor.html" };
+
+export type RichTextValue = {
+  html: string;
+  text: string;
+};
 
 type PropTypes = {
   initialHTMLValue?: string;
   placeholder?: string;
-  onInitialized?: () => {};
+  onInitialized?: () => void;
   customCSS?: string;
   footerHeight?: number;
   contentInset?: { top?: number; bottom?: number };
   style?: ViewStyle;
-  onChange?: (html: string, text: string) => {};
+  onChange?: (value: RichTextValue) => void;
+  onHeightChange?: (height: number) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 type StateType = {
-  selectionChangeListeners?: any[];
+  selectionChangeListeners?: ((items: string[]) => void)[];
   onChange?: any[];
   showLinkDialog: boolean;
   linkInitialUrl?: string;
@@ -29,34 +39,25 @@ type StateType = {
   keyboardHeight?: number;
 };
 
-export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
+export default class RichTextEditor extends Component<PropTypes, StateType> {
   static defaultProps = {
     contentInset: {},
   };
 
-  webViewRef: WebView | null = null;
+  state: StateType = {
+    selectionChangeListeners: [],
+    onChange: [],
+    showLinkDialog: false,
+    linkInitialUrl: "",
+    linkTitle: "",
+    linkUrl: "",
+    keyboardHeight: 0,
+  };
+
+  webViewRef: RefObject<WebView> = React.createRef();
 
   _selectedTextChangeListeners: any = [];
   keyboardEventListeners: EmitterSubscription[] = [];
-
-  constructor(props: PropTypes) {
-    super(props);
-    this._sendAction = this._sendAction.bind(this);
-    this.registerToolbar = this.registerToolbar.bind(this);
-    this.onMessage = this.onMessage.bind(this);
-    this._onKeyboardWillShow = this._onKeyboardWillShow.bind(this);
-    this._onKeyboardWillHide = this._onKeyboardWillHide.bind(this);
-    this.state = {
-      selectionChangeListeners: [],
-      onChange: [],
-      showLinkDialog: false,
-      linkInitialUrl: "",
-      linkTitle: "",
-      linkUrl: "",
-      keyboardHeight: 0,
-    };
-    this._selectedTextChangeListeners = [];
-  }
 
   componentDidMount() {
     if (PlatformIOS) {
@@ -76,7 +77,7 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     this.keyboardEventListeners.forEach(eventListener => eventListener.remove());
   }
 
-  _onKeyboardWillShow(event: any) {
+  _onKeyboardWillShow = (event: any) => {
     console.log("!!!!", event);
     const newKeyboardHeight = event.endCoordinates.height;
     if (this.state.keyboardHeight === newKeyboardHeight) {
@@ -86,34 +87,32 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
       this.setEditorAvailableHeightBasedOnKeyboardHeight(newKeyboardHeight);
     }
     this.setState({ keyboardHeight: newKeyboardHeight });
-  }
+  };
 
-  _onKeyboardWillHide() {
+  _onKeyboardWillHide = () => {
     this.setState({ keyboardHeight: 0 });
-  }
+  };
 
-  setEditorAvailableHeightBasedOnKeyboardHeight(keyboardHeight: number) {
+  setEditorAvailableHeightBasedOnKeyboardHeight = (keyboardHeight: number) => {
     const { top = 0, bottom = 0 } = this.props.contentInset || {};
     const marginTop = parseInt(this.props?.style?.marginTop?.toString() || "0");
     const marginBottom = parseInt(this.props.style?.marginBottom?.toString() || "0");
     const spacing = marginTop + marginBottom + top + bottom;
-
     const editorAvailableHeight = Dimensions.get("window").height - keyboardHeight - spacing;
     this.setEditorHeight(editorAvailableHeight);
-  }
+  };
 
-  contentResolve?: any;
-  contentReject?: any;
+  contentResolve?: (value?: unknown) => void;
+  contentReject?: (reason?: any) => void;
   pendingContentHtml?: number;
-  selectedTextResolve?: any;
-  selectedTextReject?: any;
+  selectedTextResolve?: (value?: unknown) => void;
+  selectedTextReject?: (reason?: any) => void;
   pendingSelectedText?: number;
 
-  onMessage(message: WebViewMessageEvent) {
-    const { nativeEvent } = message;
-    const { data: str } = nativeEvent;
+  onMessage = (messageEvent: WebViewMessageEvent) => {
+    const { data } = messageEvent.nativeEvent;
     try {
-      const message = JSON.parse(str);
+      const message = JSON.parse(data);
 
       switch (message.type) {
         case messages.CONTENT_HTML_RESPONSE:
@@ -140,10 +139,12 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
           break;
         case messages.ZSS_INITIALIZED:
           this.props.customCSS && this.setCustomCSS(this.props.customCSS);
-          this.props.placeholder && this.setContentPlaceholder(this.props.placeholder);
-          this.props.initialHTMLValue && this.setContentHTML(this.props.initialHTMLValue);
-          this.props.onChange && this.enableOnChange();
+          this.props.placeholder && this.setPlaceholder(this.props.placeholder);
+          (this.props.onChange || this.props.onHeightChange) && this.enableOnChange();
+          this.props.onFocus && this.enableOnFocus();
+          this.props.onBlur && this.enableOnBlur();
           this.props.onInitialized && this.props.onInitialized();
+          this.props.initialHTMLValue && this.setContentHTML(this.props.initialHTMLValue);
           break;
         case messages.LINK_TOUCHED:
           this.prepareInsert();
@@ -154,16 +155,19 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
           console.log("FROM ZSS", message.data);
           break;
         case messages.SCROLL:
-          if (this.webViewRef) {
+          if (this.webViewRef.current) {
             // @ts-ignore
-            this.webViewRef.setNativeProps({ contentOffset: { y: message.data } });
+            this.webViewRef.current.setNativeProps({ contentOffset: { y: message.data } });
           }
           break;
-        case messages.CONTENT_FOCUSED:
-          this.contentFocusHandler && this.contentFocusHandler();
+        case messages.FOCUSED:
+          this.props.onFocus && this.props.onFocus();
+          break;
+        case messages.BLURRED:
+          this.props.onBlur && this.props.onBlur();
           break;
         case messages.SELECTION_CHANGE: {
-          const items = message.data.items;
+          const items: string[] = message.data.items;
           this.state.selectionChangeListeners?.map(listener => {
             listener(items);
           });
@@ -172,9 +176,13 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
         case messages.CONTENT_CHANGE: {
           const html: string = message.data.html;
           const text: string = message.data.text;
+          const height: number = message.data.height;
           this.state?.onChange?.map(listener => listener(html));
           if (this.props.onChange) {
-            this.props.onChange(html, text);
+            this.props.onChange({ html, text });
+          }
+          if (this.props.onHeightChange) {
+            this.props.onHeightChange(height);
           }
           break;
         }
@@ -189,16 +197,16 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     } catch (e) {
       //alert('NON JSON MESSAGE');
     }
-  }
+  };
 
-  _hideModal() {
+  hideModal = () => {
     this.setState({
       showLinkDialog: false,
       linkInitialUrl: "",
       linkTitle: "",
       linkUrl: "",
     });
-  }
+  };
 
   handleOnApply = (linkTitle: string, linkUrl: string) => {
     if (!this.state.linkInitialUrl) {
@@ -206,23 +214,35 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
     } else {
       this.updateLink(linkUrl, linkTitle);
     }
-    this._hideModal();
+    this.hideModal();
+  };
+
+  sendAction = (action: string, data?: any) => {
+    const jsToBeExecutedOnPage = MessageConverter({ type: action, data });
+    if (this.webViewRef.current) {
+      this.webViewRef.current.injectJavaScript(jsToBeExecutedOnPage + ";true;");
+    }
+  };
+
+  init = () => {
+    this.sendAction(actions.init);
+    this.setPlatform();
+    if (this.props.footerHeight) {
+      this.setFooterHeight();
+    }
   };
 
   render() {
-    //in release build, external html files in Android can't be required, so they must be placed in the assets folder and accessed via uri
-    const pageSource = PlatformIOS ? require("./editor.html") : { uri: "file:///android_asset/editor.html" };
     return (
       <View style={styles.flex}>
         <WebView
           {...this.props}
-          hideKeyboardAccessoryView={true}
+          ref={this.webViewRef}
           keyboardDisplayRequiresUserAction={false}
-          ref={r => (this.webViewRef = r)}
-          onMessage={message => this.onMessage(message)}
-          // injectedJavaScript={injectScript}
+          showsHorizontalScrollIndicator={false}
+          onMessage={this.onMessage}
           source={pageSource}
-          onLoad={() => this.init()}
+          onLoad={this.init}
         />
         <RichTextLinkModal
           visible={this.state.showLinkDialog}
@@ -230,214 +250,82 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
           linkTitle={this.state.linkTitle}
           linkUrl={this.state.linkUrl}
           onApply={this.handleOnApply}
-          onHideModal={this._hideModal}
-          onRequestClose={this._hideModal}
+          onHideModal={this.hideModal}
+          onRequestClose={this.hideModal}
         />
       </View>
     );
   }
 
-  _sendAction(action: string, data?: any) {
-    const jsToBeExecutedOnPage = MessageConverter({ type: action, data });
-    if (this.webViewRef) {
-      this.webViewRef.injectJavaScript(jsToBeExecutedOnPage + ";true;");
-    }
-  }
+  // ======================================== Public API ========================================>
 
-  //-------------------------------------------------------------------------------
-  //--------------- Public API
-
-  showLinkDialog(optionalTitle: string = "", optionalUrl: string = "") {
+  showLinkDialog = (optionalTitle: string = "", optionalUrl: string = "") => {
     this.setState({
       linkInitialUrl: optionalUrl,
       linkTitle: optionalTitle,
       linkUrl: optionalUrl,
       showLinkDialog: true,
     });
-  }
+  };
 
-  focusContent() {
-    this._sendAction(actions.focusContent);
-  }
-
-  registerToolbar(listener: any) {
+  registerToolbar = (listener: (items: string[]) => void) => {
     this.setState({
       selectionChangeListeners: [...(this.state.selectionChangeListeners || []), listener],
     });
-  }
+  };
 
-  enableOnChange() {
-    this._sendAction(actions.enableOnChange);
-  }
+  focus = () => this.sendAction(actions.focusContent);
+  blur = () => this.sendAction(actions.blurContentEditor);
+  enableOnChange = () => this.sendAction(actions.enableOnChange);
+  enableOnFocus = () => this.sendAction(actions.enableOnFocus);
+  enableOnBlur = () => this.sendAction(actions.enableOnBlur);
+  setContentHTML = (html: string) => this.sendAction(actions.setContentHtml, html);
+  setBold = () => this.sendAction(actions.setBold);
+  setItalic = () => this.sendAction(actions.setItalic);
+  setUnderline = () => this.sendAction(actions.setUnderline);
+  heading1 = () => this.sendAction(actions.heading1);
+  heading2 = () => this.sendAction(actions.heading2);
+  heading3 = () => this.sendAction(actions.heading3);
+  heading4 = () => this.sendAction(actions.heading4);
+  heading5 = () => this.sendAction(actions.heading5);
+  heading6 = () => this.sendAction(actions.heading6);
+  setParagraph = () => this.sendAction(actions.setParagraph);
+  removeFormat = () => this.sendAction(actions.removeFormat);
+  alignLeft = () => this.sendAction(actions.alignLeft);
+  alignCenter = () => this.sendAction(actions.alignCenter);
+  alignRight = () => this.sendAction(actions.alignRight);
+  alignFull = () => this.sendAction(actions.alignFull);
+  insertBulletsList = () => this.sendAction(actions.insertBulletsList);
+  insertOrderedList = () => this.sendAction(actions.insertOrderedList);
+  insertLink = (url?: string, title?: string) => this.sendAction(actions.insertLink, { url, title });
+  updateLink = (url?: string, title?: string) => this.sendAction(actions.updateLink, { url, title });
 
-  registerContentChangeListener(listener: any) {
-    this.setState({
-      onChange: [...(this.state.onChange || []), listener],
-    });
-  }
-
-  setContentHTML(html: string) {
-    this._sendAction(actions.setContentHtml, html);
-  }
-
-  blurContentEditor() {
-    this._sendAction(actions.blurContentEditor);
-  }
-
-  setBold() {
-    this._sendAction(actions.setBold);
-  }
-
-  setItalic() {
-    this._sendAction(actions.setItalic);
-  }
-
-  setUnderline() {
-    this._sendAction(actions.setUnderline);
-  }
-
-  heading1() {
-    this._sendAction(actions.heading1);
-  }
-
-  heading2() {
-    this._sendAction(actions.heading2);
-  }
-
-  heading3() {
-    this._sendAction(actions.heading3);
-  }
-
-  heading4() {
-    this._sendAction(actions.heading4);
-  }
-
-  heading5() {
-    this._sendAction(actions.heading5);
-  }
-
-  heading6() {
-    this._sendAction(actions.heading6);
-  }
-
-  setParagraph() {
-    this._sendAction(actions.setParagraph);
-  }
-
-  removeFormat() {
-    this._sendAction(actions.removeFormat);
-  }
-
-  alignLeft() {
-    this._sendAction(actions.alignLeft);
-  }
-
-  alignCenter() {
-    this._sendAction(actions.alignCenter);
-  }
-
-  alignRight() {
-    this._sendAction(actions.alignRight);
-  }
-
-  alignFull() {
-    this._sendAction(actions.alignFull);
-  }
-
-  insertBulletsList() {
-    this._sendAction(actions.insertBulletsList);
-  }
-
-  insertOrderedList() {
-    this._sendAction(actions.insertOrderedList);
-  }
-
-  insertLink(url?: string, title?: string) {
-    this._sendAction(actions.insertLink, { url, title });
-  }
-
-  updateLink(url?: string, title?: string) {
-    this._sendAction(actions.updateLink, { url, title });
-  }
-
-  insertImage(attributes: any) {
-    this._sendAction(actions.insertImage, attributes);
+  insertImage = (attributes: any) => {
+    this.sendAction(actions.insertImage, attributes);
     this.prepareInsert(); //This must be called BEFORE insertImage. But WebViewBridge uses a stack :/
-  }
+  };
 
-  setSubscript() {
-    this._sendAction(actions.setSubscript);
-  }
+  setSubscript = () => this.sendAction(actions.setSubscript);
+  setSuperscript = () => this.sendAction(actions.setSuperscript);
+  setStrikethrough = () => this.sendAction(actions.setStrikethrough);
+  setHR = () => this.sendAction(actions.setHR);
+  setIndent = () => this.sendAction(actions.setIndent);
+  setOutdent = () => this.sendAction(actions.setOutdent);
+  setBackgroundColor = (color: string) => this.sendAction(actions.setBackgroundColor, color);
+  setTextColor = (color: string) => this.sendAction(actions.setTextColor, color);
+  setPlaceholder = (placeholder?: string) => this.sendAction(actions.setContentPlaceholder, placeholder);
+  setCustomCSS = (css: string) => this.sendAction(actions.setCustomCSS, css);
+  prepareInsert = () => this.sendAction(actions.prepareInsert);
+  restoreSelection = () => this.sendAction(actions.restoreSelection);
+  setEditorHeight = (height: number) => this.sendAction(actions.setEditorHeight, height);
+  setFooterHeight = () => this.sendAction(actions.setFooterHeight, this.props.footerHeight);
+  setPlatform = () => this.sendAction(actions.setPlatform, Platform.OS);
 
-  setSuperscript() {
-    this._sendAction(actions.setSuperscript);
-  }
-
-  setStrikethrough() {
-    this._sendAction(actions.setStrikethrough);
-  }
-
-  setHR() {
-    this._sendAction(actions.setHR);
-  }
-
-  setIndent() {
-    this._sendAction(actions.setIndent);
-  }
-
-  setOutdent() {
-    this._sendAction(actions.setOutdent);
-  }
-
-  setBackgroundColor(color: string) {
-    this._sendAction(actions.setBackgroundColor, color);
-  }
-
-  setTextColor(color: string) {
-    this._sendAction(actions.setTextColor, color);
-  }
-
-  setContentPlaceholder(placeholder?: string) {
-    this._sendAction(actions.setContentPlaceholder, placeholder);
-  }
-
-  setCustomCSS(css: string) {
-    this._sendAction(actions.setCustomCSS, css);
-  }
-
-  prepareInsert() {
-    this._sendAction(actions.prepareInsert);
-  }
-
-  restoreSelection() {
-    this._sendAction(actions.restoreSelection);
-  }
-
-  init() {
-    this._sendAction(actions.init);
-    this.setPlatform();
-    if (this.props.footerHeight) {
-      this.setFooterHeight();
-    }
-  }
-
-  setEditorHeight(height: number) {
-    this._sendAction(actions.setEditorHeight, height);
-  }
-
-  setFooterHeight() {
-    this._sendAction(actions.setFooterHeight, this.props.footerHeight);
-  }
-
-  setPlatform() {
-    this._sendAction(actions.setPlatform, Platform.OS);
-  }
-
-  async getContentHtml() {
+  getHtml = async () => {
     return new Promise((resolve, reject) => {
       this.contentResolve = resolve;
       this.contentReject = reject;
-      this._sendAction(actions.getContentHtml);
+      this.sendAction(actions.getContentHtml);
 
       this.pendingContentHtml = setTimeout(() => {
         if (this.contentReject) {
@@ -445,13 +333,13 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
         }
       }, 5000);
     });
-  }
+  };
 
-  async getSelectedText() {
+  getSelectedText = async () => {
     return new Promise((resolve, reject) => {
       this.selectedTextResolve = resolve;
       this.selectedTextReject = reject;
-      this._sendAction(actions.getSelectedText);
+      this.sendAction(actions.getSelectedText);
 
       this.pendingSelectedText = setTimeout(() => {
         if (this.selectedTextReject) {
@@ -459,18 +347,9 @@ export default class RichTextEditor<p> extends Component<PropTypes, StateType> {
         }
       }, 5000);
     });
-  }
+  };
 
-  contentFocusHandler?: () => {} = undefined;
-
-  setContentFocusHandler(callbackHandler: () => {}) {
-    this.contentFocusHandler = callbackHandler;
-    this._sendAction(actions.setContentFocusHandler);
-  }
-
-  addSelectedTextChangeListener(listener: any) {
-    this._selectedTextChangeListeners.push(listener);
-  }
+  addSelectedTextChangeListener = (listener: any) => this._selectedTextChangeListeners.push(listener);
 }
 
 const styles = StyleSheet.create({

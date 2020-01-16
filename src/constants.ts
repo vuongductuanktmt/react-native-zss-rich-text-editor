@@ -1,5 +1,7 @@
-export const actions: { [key: string]: string } = {
+export const actions = {
   enableOnChange: "ENABLE_ON_CHANGE",
+  enableOnFocus: "ENABLE_ON_FOCUS",
+  enableOnBlur: "ENABLE_ON_BLUR",
   setTitleHtml: "SET_TITLE_HTML",
   setContentHtml: "SET_CONTENT_HTML",
   getTitleHtml: "GET_TITLE_HTML",
@@ -55,7 +57,7 @@ export const actions: { [key: string]: string } = {
   setPlatform: "SET_PLATFORM",
 };
 
-export const messages: { [key: string]: string } = {
+export const messages = {
   TITLE_HTML_RESPONSE: "TITLE_HTML_RESPONSE",
   TITLE_TEXT_RESPONSE: "TITLE_TEXT_RESPONSE",
   CONTENT_HTML_RESPONSE: "CONTENT_HTML_RESPONSE",
@@ -63,7 +65,8 @@ export const messages: { [key: string]: string } = {
   SCROLL: "SCROLL",
   LOG: "LOG",
   TITLE_FOCUSED: "TITLE_FOCUSED",
-  CONTENT_FOCUSED: "CONTENT_FOCUSED",
+  FOCUSED: "FOCUSED",
+  BLURRED: "BLURRED",
   SELECTION_CHANGE: "SELECTION_CHANGE",
   CONTENT_CHANGE: "CONTENT_CHANGE",
   SELECTED_TEXT_RESPONSE: "SELECTED_TEXT_RESPONSE",

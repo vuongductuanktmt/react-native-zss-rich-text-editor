@@ -36,7 +36,7 @@ export default class RichTextToolbar extends Component<PropTypes, StateType> {
     constructor(props: PropTypes);
     getRows(actions: any, selectedItems: any): any;
     componentDidMount(): void;
-    setSelectedItems(selectedItems: any): void;
+    setSelectedItems(selectedItems: string[]): void;
     _getButtonSelectedStyle(): ViewStyle;
     _getButtonUnselectedStyle(): ViewStyle;
     _getButtonIcon(action: any): any;

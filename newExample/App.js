@@ -40,7 +40,7 @@ class RichTextExample extends Component {
   }
 
   async getHTML() {
-    const contentHtml = await this.richtext.getContentHtml();
+    const contentHtml = await this.richtext.getHtml();
     //alert(titleHtml + ' ' + contentHtml)
   }
 

@@ -11,7 +11,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "ts-compile": "tsc --build tsconfig.json && yarn copy-extra",
-    "copy-extra": "cp ./src/*.html ./dist"
+    "copy-extra": "cp -f ./src/*.html ./dist"
   },
   "dependencies": {},
   "devDependencies": {

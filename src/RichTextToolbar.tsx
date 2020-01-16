@@ -80,12 +80,12 @@ export default class RichTextToolbar extends Component<PropTypes, StateType> {
     if (!editor) {
       throw new Error("Toolbar has no editor!");
     } else {
-      editor.registerToolbar((selectedItems: any) => this.setSelectedItems(selectedItems));
+      editor.registerToolbar((selectedItems: string[]) => this.setSelectedItems(selectedItems));
       this.setState({ editor });
     }
   }
 
-  setSelectedItems(selectedItems: any) {
+  setSelectedItems(selectedItems: string[]) {
     if (selectedItems !== this.state.selectedItems) {
       this.setState({
         selectedItems,

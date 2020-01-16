@@ -10,18 +10,12 @@ export const MessageConverter = (action: MessageConverterAction) => {
       return `zss_editor.setPlatform('${action.data}');`;
     case `${actions.enableOnChange}`:
       return "zss_editor.enableOnChange()";
-    case `${actions.setTitleHtml}`:
-      return `zss_editor.setTitleHTML('${action.data}');`;
-    case `${actions.toggleTitle}`:
-      return `zss_editor.toggleTitle('${action.data}');`;
-    case `${actions.hideTitle}`:
-      return `zss_editor.hideTitle('${action.data}');`;
-    case `${actions.showTitle}`:
-      return `zss_editor.showTitle('${action.data}');`;
+    case `${actions.enableOnFocus}`:
+      return "zss_editor.enableOnFocus()";
+    case `${actions.enableOnBlur}`:
+      return "zss_editor.enableOnBlur()";
     case `${actions.setContentHtml}`:
-      return `zss_editor.setContentHTML('${action.data}');`;
-    case `${actions.blurTitleEditor}`:
-      return `zss_editor.blurTitleEditor();`;
+      return `zss_editor.setContentHTML('${escape(action.data)}');`;
     case `${actions.blurContentEditor}`:
       return `zss_editor.blurContentEditor();`;
     case `${actions.setBold}`:
@@ -76,14 +70,10 @@ export const MessageConverter = (action: MessageConverterAction) => {
       return `zss_editor.setIndent();`;
     case `${actions.setOutdent}`:
       return `zss_editor.setOutdent();`;
-    case `${actions.setTitlePlaceholder}`:
-      return `zss_editor.setTitlePlaceholder('${action.data}');`;
     case `${actions.setContentPlaceholder}`:
       return `zss_editor.setContentPlaceholder('${action.data}');`;
     case `${actions.focusContent}`:
       return `zss_editor.focusContent();`;
-    case `${actions.focusTitle}`:
-      return `zss_editor.focusTitle();`;
     case `${actions.prepareInsert}`:
       return `zss_editor.prepareInsert();`;
     case `${actions.restoreSelection}`:
@@ -98,16 +88,8 @@ export const MessageConverter = (action: MessageConverterAction) => {
       return `zss_editor.setEditorHeight('${action.data}');`;
     case `${actions.setFooterHeight}`:
       return `zss_editor.setFooterHeight('${action.data}');`;
-    case `${actions.setTitleFocusHandler}`:
-      return `zss_editor.setTitleFocusHandler();`;
     case `${actions.setContentFocusHandler}`:
       return `zss_editor.setContentFocusHandler();`;
-    case `${actions.getTitleHtml}`:
-      return `var html = zss_editor.getTitleHTML();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_HTML_RESPONSE}', data: html}));`;
-    case `${actions.getTitleText}`:
-      return `var html = zss_editor.getTitleText();
-      ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.TITLE_TEXT_RESPONSE}', data: html}));`;
     case `${actions.getContentHtml}`:
       return `var html = zss_editor.getContentHTML();
       ReactNativeWebView.postMessage(JSON.stringify({type: '${messages.CONTENT_HTML_RESPONSE}', data: html}));`;
