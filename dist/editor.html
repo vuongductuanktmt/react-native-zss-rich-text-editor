@@ -604,12 +604,12 @@
         }
 
         zss_editor.enableOnChange = function () {
-            $('#' + zss_editor.id).on('change', function () {
+            $('#' + zss_editor.id).on('input change', function () {
                 sendMessage({
                     type: 'CONTENT_CHANGE',
                     data: {
-                        html: getHtml("zss_editor_content"),
-                        text: getText("zss_editor_content"),
+                        html: getHtml(),
+                        text: getText(),
                         height: getEditorHeight()
                     }
                 })
