@@ -35,7 +35,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     backgroundColor: '#ffffff',
-    paddingTop: 40,
   },
   richText: {
     alignItems: 'center',
@@ -49,9 +48,8 @@ const styles = StyleSheet.create({
     color: '#000000',
     height: 100,
     width: '100%',
-    borderBottomWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#000000',
+    borderTopWidth: 1,
+    borderColor: '#C8C8C8',
   },
 });
 
