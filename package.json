@@ -2,7 +2,7 @@
   "name": "react-native-zss-rich-text-editor",
   "repository": {
     "type": "git",
-    "url": "https://github.com/boreal-is/react-native-zss-rich-text-editor.git"
+    "url": "https://github.com/vuongductuanktmt/react-native-zss-rich-text-editor.git"
   },
   "version": "1.2.0",
   "description": "React Native Wrapper for ZSSRichTextEditor",
